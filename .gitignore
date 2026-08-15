@@ -1,0 +1,20 @@
+# Kernel module build artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+
+# Kbuild generated files
+.*.cmd
+*.cmd
+Module.symvers
+modules.order
+
+# Kbuild directory
+.tmp_versions/
+
+# Editor
+compile_commands.json

@@ -11,6 +11,7 @@
  * kernel buffer 
  */
 static char buffer[255];
+static size_t buffer_pointer;
 
 static int driver_open(struct inode * node, struct file *fp)
 {
@@ -34,9 +35,7 @@ static ssize_t driver_read(struct file *fp,
 			   loff_t *offset)
 {
 
-	size_t len = sizeof(buffer);
-	if (*offset >= len)
-		return 0;
+	size_t remaining = buffer_pointer - *offset;
 
 	/*
 	 * we should only copy the amount of byte that the user asks in the count,
@@ -47,7 +46,7 @@ static ssize_t driver_read(struct file *fp,
 	 * so after 2nd read the offset is 20 and len is 25 so we get 5, now it could be 
 	 * either of those value and we can make use of the min function here 
 	 */
-	size_t bytes_to_copy = min(count ,len - *offset);
+	size_t bytes_to_copy = min(count ,remaining);
 
 	/* returns the number of byte that failed to copy 
 	 * example : if copy_to_user(..,..,10) and returned value is 
@@ -55,7 +54,11 @@ static ssize_t driver_read(struct file *fp,
 	 * 4 : only 6 bytes were successfully copied and 4 bytes failed to be copied
 	 * 10 : no bytes were copied
 	 */
-	size_t nbyte = copy_to_user(user_space_buffer,buffer,bytes_to_copy);
+
+	/* buffer + *offset because we want to read from where we left off not from the 0 
+	 * again, other wise it would just loop 
+	 */
+	size_t nbyte = copy_to_user(user_space_buffer,buffer + *offset,bytes_to_copy);
 	size_t bytes_copied = bytes_to_copy - nbyte;
 	/*
 	 * its offset should increment by the number of bytes that were successfully copied,
@@ -64,13 +67,32 @@ static ssize_t driver_read(struct file *fp,
 	*offset += bytes_copied;
 	printk("read performed");
 	
-	return 0;
+	return bytes_copied;
 }
+
+static ssize_t driver_write(struct file *fp, 
+			const char __user *user_space_buffer,
+			size_t count, 
+			loff_t * offset)
+{
+	/* the write size cant be larger than 
+	 * the kernel buffer so we limit it its max value
+	 */
+	size_t bytes_to_copy = min(count,sizeof(buffer));	
+	size_t nbyte = copy_from_user(buffer, user_space_buffer, bytes_to_copy);
+
+	size_t bytes_copied = bytes_to_copy - nbyte;
+	buffer_pointer = bytes_copied;
+	return bytes_copied;
+	
+}
+
 static struct file_operations f_ops = {
 	.owner = THIS_MODULE,
 	.open = driver_open,
 	.release = driver_release,
 	.read = driver_read,
+	.write = driver_write
 
 };
 
@@ -80,10 +102,8 @@ static int __init init_hello(void)
 	int status = register_chrdev(D_MAJOR, "nara-fs-driver", &f_ops);	
 	if (status == 0)
 		printk("nara-fs-driver registered with major : %d and minor : %d \n",D_MAJOR,0);
-	else if (status > 0){
-		printk("nara-fs-driver registered with major : %d and minor : %d \n",status>>20,status&0xfffff);
-	}else{
-		printk("error registering the nara-fs-driver \n");
+	else{
+		printk(KERN_ERR "error registering the nara-fs-driver \n");
 		return -1;
 	}
 	return 0;

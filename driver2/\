@@ -7,9 +7,6 @@
 
 #define D_MAJOR 90
 
-/*
- * kernel buffer 
- */
 static char buffer[255];
 
 static int driver_open(struct inode * node, struct file *fp)
@@ -24,10 +21,6 @@ static int driver_release(struct inode * node, struct file *fp)
 	return 0;
 }
 
-/*
-* count is the number of bytes that the user want to read,
-* offset is the pointer pointing at the location current location of the file
-*/
 static ssize_t driver_read(struct file *fp,
 			   char __user *user_space_buffer, 
 			   size_t count,
@@ -38,30 +31,8 @@ static ssize_t driver_read(struct file *fp,
 	if (*offset >= len)
 		return 0;
 
-	/*
-	 * we should only copy the amount of byte that the user asks in the count,
-	 * also we should be wary of the fact that the bytes may run out at the end 
-	 * lets say we have 25 bytes on our kernel buffer, and user count is 10
-	 * so we go 10 , 10 and now we cant read 10 byte again we need to read only 5 byte 
-	 * that would be given by len i.e 25 - offset where the pointer is pointing at 
-	 * so after 2nd read the offset is 20 and len is 25 so we get 5, now it could be 
-	 * either of those value and we can make use of the min function here 
-	 */
-	size_t bytes_to_copy = min(count ,len - *offset);
-
-	/* returns the number of byte that failed to copy 
-	 * example : if copy_to_user(..,..,10) and returned value is 
-	 * 0 : all 10 bytes were successfully copied
-	 * 4 : only 6 bytes were successfully copied and 4 bytes failed to be copied
-	 * 10 : no bytes were copied
-	 */
-	size_t nbyte = copy_to_user(user_space_buffer,buffer,bytes_to_copy);
-	size_t bytes_copied = bytes_to_copy - nbyte;
-	/*
-	 * its offset should increment by the number of bytes that were successfully copied,
-	 * and not by the number of bytes that failed to copy
-	 * */
-	*offset += bytes_copied;
+	size_t nbyte = copy_to_user(user_space_buffer,buffer,len);
+	*offset += nbyte;
 	printk("read performed");
 	
 	return 0;
